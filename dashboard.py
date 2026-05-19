@@ -245,11 +245,11 @@ def traffic_worker(state, host_header, stop_event):
             )
             with urllib.request.urlopen(req, timeout=TRAFFIC_TIMEOUT_S) as resp:
                 body = json.loads(resp.read().decode())
-            hostname     = body.get("hostname",     "")[:20]
-            version      = body.get("version",      "")
-            cluster_name = body.get("cluster_name", "")
-            uptime       = body.get("uptime",       "")
-            line = (hostname, version, cluster_name, uptime)
+            hostname      = body.get("hostname",      "")[:20]
+            version       = body.get("version",       "")
+            rollout_label = body.get("rollout_label", "")
+            uptime        = body.get("uptime",        "")
+            line = (hostname, version, rollout_label, uptime)
         except Exception as exc:
             line = (f"[err] {str(exc)[:40]}", "", "", "")
 
@@ -376,15 +376,15 @@ def draw(stdscr, states, rs, metric_states=None, wms=None, no_rollout=False):
         stable = _stable_version(states, key="pod_hash" if no_rollout else "version")
 
         if no_rollout:
-            cn_counts = {}
+            rl_counts = {}
             for s in states:
                 with s.lock:
-                    for _, _, cn, _ in s.traffic:
-                        if cn:
-                            cn_counts[cn] = cn_counts.get(cn, 0) + 1
-            stable_cluster_name = max(cn_counts, key=cn_counts.get) if cn_counts else ""
+                    for _, _, rl, _ in s.traffic:
+                        if rl:
+                            rl_counts[rl] = rl_counts.get(rl, 0) + 1
+            stable_rollout_label = max(rl_counts, key=rl_counts.get) if rl_counts else ""
         else:
-            stable_cluster_name = ""
+            stable_rollout_label = ""
 
         # ── row 0: title bar ─────────────────────────────────────────────────
         title = " Karmada Multi-Cluster Dashboard  [q] quit " if no_rollout \
@@ -512,7 +512,7 @@ def draw(stdscr, states, rs, metric_states=None, wms=None, no_rollout=False):
 
             log_end = rows - 1 - METRIC_ROWS
             visible = lines[-(log_end - (div_row + 2)):]
-            for li, (hostname, version, cluster_name, uptime) in enumerate(visible):
+            for li, (hostname, version, rollout_label, uptime) in enumerate(visible):
                 row = div_row + 2 + li
                 if row >= log_end:
                     break
@@ -520,11 +520,11 @@ def draw(stdscr, states, rs, metric_states=None, wms=None, no_rollout=False):
                 if is_err:
                     text = hostname
                 elif no_rollout:
-                    text = f"{hostname}  ver={cluster_name}  tag={version}"
+                    text = f"{hostname}  ver={rollout_label}  tag={version}"
                 else:
                     text = f"{hostname}  tag={version}  up={uptime}"
                 if no_rollout:
-                    is_canary = _is_canary_version(cluster_name, stable_cluster_name)
+                    is_canary = _is_canary_version(rollout_label, stable_rollout_label)
                 else:
                     is_canary = _is_canary_version(version, stable)
                 colour = (curses.color_pair(C_CANARY) | curses.A_BOLD
